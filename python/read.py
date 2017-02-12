@@ -93,7 +93,7 @@ def read_csv():
             #因为csv文件可能为空，所以需要判断csv文件是否为空
             if os.path.getsize(file_path_name):
                 #读取csv文件，并将读取的结果存入dataframe格式
-                data_hscei = pd.read_csv(file_path_name,header=None, encoding='utf-16',sep='\t') 
+                data_hscei = pd.read_csv(file_path_name,header=None, encoding='cp936',sep='\t') 
             else:
                 #如果csv为空，则将该文件移动到相应文件夹，并进行下一个文件；
                 shutil.move(file_path_name, MOVE_FAILED_FILE_TO)
@@ -149,7 +149,7 @@ def read_excel():
             #因为excel文件可能为空，所以需要判断excel文件是否为空
             if os.path.getsize(file_path_name):
                 #读取excel文件；
-                data_csindex=pd.read_excel(file_path_name,header=None,encoding='utf-16',sep='\t')
+                data_csindex=pd.read_excel(file_path_name,header=None,encoding='cp936',sep='\t')
             else:
                 #如果excel为空，则将该文件移动到相应文件夹，并进行下一个文件；
                 shutil.move(file_path_name, MOVE_FAILED_FILE_TO)
