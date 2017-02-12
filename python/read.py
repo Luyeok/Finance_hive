@@ -10,7 +10,7 @@
 #导入pandas、MySQLdb以及slqalchemy、os、shutil库
 import pandas as pd
 from datetime import date,datetime
-import MySQLdb 
+import MySQLdb
 from sqlalchemy import create_engine
 import os
 import shutil
@@ -29,6 +29,12 @@ MOVE_FAILED_FILE_TO="/home/luyeok/finance/record_fail/"
 INDEX_TO_STOCK={'name':['上证180','上证50','沪深300','红利指数','中证500','HSCEI'],
 'code':['510180','510050','510300','510880','510500','510900']}
 INDEX_TO_STOCK=pd.DataFrame(INDEX_TO_STOCK)
+#网络数据读取标记
+#INTERNET_READ_SIGN=0
+#用READ_COUNT来控制爬取网络数据失败后的间隙长度
+#以及爬取网络数据的次数
+#里面每个数代表的就是间隙的秒数，数的个数代表爬取多少次
+READ_COUNT=[0,10,50,5,102,8,1800,3600]
 
 
 #将data_to_write写入mysql 数据库
@@ -114,7 +120,7 @@ def read_csv():
             #为hscei数据增加code信息
             data_hscei['code']='510900'
             #得到当天相应指数基金的数据信息
-            db_tmp=ts.get_k_data('510900',start=date_tmp,end=date_tmp, retry_count=5, pause=30)
+            db_tmp=ts.get_k_data('510900',start=date_tmp,end=date_tmp, retry_count=3, pause=5)
             #删除获取的指数基金信息中的date列；
             #因为接下来要连接指数基金信息和从csv获取的列，这里面都有date信息
             #所以为了避免产生两个date_x，date_y，需要将获取的date列删掉。
@@ -172,7 +178,7 @@ def read_excel():
             #针对INDEX_TO_STOCK里code列的每个值；
             #查询相应信息，每个值返回一个dataframe对象；
             #对每一个dataframe对象调用iloc[]方法，取出对应的数据行，形成一个data_tmp的list；
-            data_tmp=map(lambda x:ts.get_k_data(x,start=date_tmp,end=date_tmp, retry_count=5, pause=30).iloc[0,:],INDEX_TO_STOCK['code'])
+            data_tmp=map(lambda x:ts.get_k_data(x,start=date_tmp,end=date_tmp, retry_count=3, pause=4).iloc[0,:],INDEX_TO_STOCK['code'])
             #将data_tmp的list形成一个dataframe;
             index_data=pd.DataFrame(data_tmp)
             #为了防止merge过程中与data_csindex中的date重复
@@ -192,8 +198,15 @@ def read_excel():
 def read_value():
     #此函数使用Tushare来抓取网上的pe以及当天的数据
     #抓取股票的基本面信息，主要为了从基本面信息中提取pe；
-    #code作为index进行了存储
-    stock_basics=ts.get_stock_basics()
+    #将网络文件读取标记置0（未成功），这样在每次启动read_value的时候
+    #都能够将标记重置为“未成功”
+    try:
+        #code作为index进行了存储
+        stock_basics=ts.get_stock_basics()
+        #抓取股票市值数据
+        stock_value=ts.get_today_all()
+    except:
+        return 404
     #这里，将index转为code列存储
     stock_basics['code']=stock_basics.index
     #将抓取的数据整理成date,name,pe的形式
@@ -203,8 +216,7 @@ def read_value():
     stock_basics['date']=time.strftime("%Y-%m-%d")
     #去除name列数据中的空格
     stock_basics['name']=stock_basics['name'].map(lambda x : x.replace(" ",''))
-    #抓取股票市值数据
-    stock_value=ts.get_today_all()
+
     #删除掉不需要的列
     stock_value.drop(['name','turnoverratio','amount','per','pb','mktcap','nmc'],axis=1,inplace=True)
     #将两个dataframe进行连接
@@ -213,10 +225,27 @@ def read_value():
     #将stock_value中的trade列名改为close，以便写入数据库
     stock_value.rename(columns={'trade':'close'},inplace=True)
     write_to_mysql(stock_value)
+    return 1
 
 if __name__=='__main__':
     read_csv()
     read_excel()
-    read_value()
+    #这里因为读取read_value()的值比较多，也经常失败
+    #所以我们在读取全网络数据的时候，需要增加一个循环
+    #判断网络数据是否读取成功
+    for sleeptime in READ_COUNT:
+        time.sleep(sleeptime)
+        n=read_value()
+        if n==404:
+            print 'n=404, we will read it again!'
+            continue
+        else:
+            print"Read Internet value Finished."
+            break
+        if sleeptime==3600:
+            print "Read Internet value Error!"
+        else:
+            pass
+    
     #这里，数据库使用完毕，需要dispose相应的资源；
     DB_ENGINE.dispose()
