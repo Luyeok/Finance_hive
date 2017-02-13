@@ -35,6 +35,8 @@ INDEX_TO_STOCK=pd.DataFrame(INDEX_TO_STOCK)
 #以及爬取网络数据的次数
 #里面每个数代表的就是间隙的秒数，数的个数代表爬取多少次
 READ_COUNT=[0,10,50,5,102,8,1800,3600]
+MARK_TS_GET_STOCK_BASICS=0
+MARK_TS_GET_TODAY_ALL=0
 
 
 #将data_to_write写入mysql 数据库
@@ -93,7 +95,7 @@ def read_csv():
             #因为csv文件可能为空，所以需要判断csv文件是否为空
             if os.path.getsize(file_path_name):
                 #读取csv文件，并将读取的结果存入dataframe格式
-                data_hscei = pd.read_csv(file_path_name,header=None, encoding='cp936',sep='\t') 
+                data_hscei = pd.read_csv(file_path_name,header=None, encoding='utf-16',sep='\t') 
             else:
                 #如果csv为空，则将该文件移动到相应文件夹，并进行下一个文件；
                 shutil.move(file_path_name, MOVE_FAILED_FILE_TO)
@@ -149,7 +151,7 @@ def read_excel():
             #因为excel文件可能为空，所以需要判断excel文件是否为空
             if os.path.getsize(file_path_name):
                 #读取excel文件；
-                data_csindex=pd.read_excel(file_path_name,header=None,encoding='cp936',sep='\t')
+                data_csindex=pd.read_excel(file_path_name,header=None,encoding='utf-16',sep='\t')
             else:
                 #如果excel为空，则将该文件移动到相应文件夹，并进行下一个文件；
                 shutil.move(file_path_name, MOVE_FAILED_FILE_TO)
@@ -163,7 +165,7 @@ def read_excel():
             #对data_csindex进行切片，取出相应的列；
             data_csindex=data_csindex.iloc[4:15,:]
             data_csindex=data_csindex.iloc[:,[0,8]]
-            #定义列名，为写入数据库做准备；
+            #定义列名，为写入数据库做准；
             data_csindex.columns=['name','pe']
             #将日期写入data_csindex的dataframe中，以便后面使用；
             data_csindex['date']=date_tmp
@@ -194,19 +196,55 @@ def read_excel():
         print"Empty Excel Folder."
         pass
 
+def TS_GET_STOCK_BASICS():
+    try:
+        return ts.get_stock_basics()
+    except:
+        MARK_TS_GET_STOCK_BASICS=404
+
+        
+def TS_GET_TODAY_ALL():
+    try:
+        return ts.get_today_all()
+    except:
+        MARK_TS_GET_TODAY_ALL=404
+        
+
 #使用tushare抓取网上股票pe信息
 def read_value():
     #此函数使用Tushare来抓取网上的pe以及当天的数据
     #抓取股票的基本面信息，主要为了从基本面信息中提取pe；
     #将网络文件读取标记置0（未成功），这样在每次启动read_value的时候
     #都能够将标记重置为“未成功”
-    try:
-        #code作为index进行了存储
-        stock_basics=ts.get_stock_basics()
-        #抓取股票市值数据
-        stock_value=ts.get_today_all()
-    except:
-        return 404
+    for sleeptime in READ_COUNT:
+        time.sleep(sleeptime)
+        stock_basics=pd.DataFrame(TS_GET_STOCK_BASICS())
+        if MARK_TS_GET_STOCK_BASICS==404:
+            print 'n=404, we will read STOCK BASICS again!'
+            continue
+        else:
+            print"Read STOCK BASICS Finished."
+            break
+        if sleeptime==3600:
+            print "Read STOCK BASICS Error!"
+        else:
+            pass
+    
+    time.sleep(28)
+    
+    for sleeptime in READ_COUNT:
+        time.sleep(sleeptime)
+        stock_value=pd.DataFrame(TS_GET_TODAY_ALL())
+        if MARK_TS_GET_TODAY_ALL==404:
+            print 'n=404, we will read STOCK TODAY again!'
+            continue
+        else:
+            print"Read STOCK TODAY Finished."
+            break
+        if sleeptime==3600:
+            print "Read STOCK TODAY Error!"
+        else:
+            pass
     #这里，将index转为code列存储
     stock_basics['code']=stock_basics.index
     #将抓取的数据整理成date,name,pe的形式
@@ -225,27 +263,19 @@ def read_value():
     #将stock_value中的trade列名改为close，以便写入数据库
     stock_value.rename(columns={'trade':'close'},inplace=True)
     write_to_mysql(stock_value)
-    return 1
 
 if __name__=='__main__':
+    #为输出log信息查错
+    print time.strftime("%Y-%m-%d, %H:%M:%S")
+    print "======read_value Begin======="
+    read_value()
+    print "======read_csv Begin========"
     read_csv()
+    print "======read_excel Begin========"
     read_excel()
+    print "======Finished============="
     #这里因为读取read_value()的值比较多，也经常失败
     #所以我们在读取全网络数据的时候，需要增加一个循环
     #判断网络数据是否读取成功
-    for sleeptime in READ_COUNT:
-        time.sleep(sleeptime)
-        n=read_value()
-        if n==404:
-            print 'n=404, we will read it again!'
-            continue
-        else:
-            print"Read Internet value Finished."
-            break
-        if sleeptime==3600:
-            print "Read Internet value Error!"
-        else:
-            pass
-    
     #这里，数据库使用完毕，需要dispose相应的资源；
     DB_ENGINE.dispose()
