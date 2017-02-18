@@ -19,7 +19,7 @@ import time
 #import pdb
 #设置全局变量
 #DB_ENGINE为创建的engine，为连接数据库做准备；
-DB_ENGINE = create_engine(r'mysql://luyeok:Forrestrun88$%@localhost:3306/finance?charset=utf8')
+DB_ENGINE = create_engine(r'mysql://User:Password@localhost:3306/finance?charset=utf8')
 HSCEI_PATH="/home/luyeok/finance/hscei/"
 CSINDEX_PATH="/home/luyeok/finance/csindex/"
 MOVE_RECORDED_EXCEL_TO="/home/luyeok/finance/record_csindex/"
@@ -219,7 +219,7 @@ def read_value():
     for sleeptime in READ_COUNT:
         time.sleep(sleeptime)
         stock_basics=pd.DataFrame(TS_GET_STOCK_BASICS())
-        if MARK_TS_GET_STOCK_BASICS==404:
+        if MARK_TS_GET_STOCK_BASICS==404 or stock_basics.empty:
             print 'n=404, we will read STOCK BASICS again!'
             continue
         else:
@@ -235,7 +235,7 @@ def read_value():
     for sleeptime in READ_COUNT:
         time.sleep(sleeptime)
         stock_value=pd.DataFrame(TS_GET_TODAY_ALL())
-        if MARK_TS_GET_TODAY_ALL==404:
+        if MARK_TS_GET_TODAY_ALL==404 or stock_value.empty:
             print 'n=404, we will read STOCK TODAY again!'
             continue
         else:
@@ -249,6 +249,7 @@ def read_value():
     stock_basics['code']=stock_basics.index
     #将抓取的数据整理成date,name,pe的形式
     stock_basics.drop(['industry','area','outstanding','totals','totalAssets','liquidAssets','fixedAssets','reserved','reservedPerShare','esp','pb','timeToMarket','undp','perundp','rev','profit','gpr','npr','holders','bvps'],axis=1,inplace=True)
+    
     #给stock_pe的dataframe增添日期；
     #这里的日期就是获取的当天服务器日期；
     stock_basics['date']=time.strftime("%Y-%m-%d")
